@@ -17,25 +17,28 @@ fn main() {
     for c in chars {
         if c.is_digit(10) {
             n = n * 10 + c.to_digit(10).unwrap();
-        } else {
+            continue;
+        }
+        if c == '+' || c == '-' {
             if op == '+' {
                 println!("  add rax, {}", n);
             } else if op == '-' {
                 println!("  sub rax, {}", n);
-            } else {
+            } else if op == '.' {
                 println!("  mov rax, {}", n);
             }
             n = 0;
             op = c;
+            continue;
         }
-        // eprintln!("unexpected character: '{}'", c);
-        // process::exit(1);
+        eprintln!("unexpected character: '{}'", c);
+        process::exit(1);
     }
     if op == '+' {
         println!("  add rax, {}", n);
     } else if op == '-' {
         println!("  sub rax, {}", n);
-    } else {
+    } else if op == '.' {
         println!("  mov rax, {}", n);
     }
 
