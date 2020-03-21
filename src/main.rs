@@ -40,7 +40,7 @@ fn tokenize(iter: &mut Peekable<Chars>) -> Vec<Token> {
                 tokens.push(Token { kind: TokenKind::Num, val: Some(ret), str: ret.to_string() });
                 // iter.next();
             }
-            Some(c) if *c == '+' || *c == '-' => {
+            Some(c) if vec!['+', '-', '*', '/', '(', ')'].contains(c) => {
                 tokens.push(Token { kind: TokenKind::Reserved, val: None, str: c.to_string() });
                 iter.next();
             }
@@ -55,6 +55,23 @@ fn tokenize(iter: &mut Peekable<Chars>) -> Vec<Token> {
         }
     }
     tokens
+}
+
+#[derive(Debug, PartialEq)]
+enum NodeKind {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Num,
+}
+
+#[derive(Debug)]
+struct Node {
+    kind: NodeKind,
+    lhs: Option<Box<Node>>,
+    rhs: Option<Box<Node>>,
+    val: Option<i32>,
 }
 
 struct Parser {
@@ -94,9 +111,95 @@ impl Parser {
             val.unwrap()
         }
     }
-    pub fn at_eof(&self) -> bool {
-        self.current_token().kind == TokenKind::EOF
+    // pub fn at_eof(&self) -> bool {
+    //     self.current_token().kind == TokenKind::EOF
+    // }
+    // expr = mul ("+" mul | "-" mul)*
+    pub fn expr(&mut self) -> Node {
+        let mut ret = self.mul();
+        loop {
+            if self.consume("+".to_string()) {
+                ret = Node {
+                    kind: NodeKind::Add,
+                    lhs: Some(Box::new(ret)),
+                    rhs: Some(Box::new(self.mul())),
+                    val: None
+                }
+            } else if self.consume("-".to_string()) {
+                ret = Node {
+                    kind: NodeKind::Sub,
+                    lhs: Some(Box::new(ret)),
+                    rhs: Some(Box::new(self.mul())),
+                    val: None
+                }
+            } else {
+                return ret
+            }
+        }
     }
+    // mul = primary ("*" primary | "/" primary)*
+    pub fn mul(&mut self) -> Node {
+        let mut ret = self.primary();
+        loop {
+            if self.consume("*".to_string()) {
+                ret = Node {
+                    kind: NodeKind::Mul,
+                    lhs: Some(Box::new(ret)),
+                    rhs: Some(Box::new(self.primary())),
+                    val: None
+                }
+            } else if self.consume("/".to_string()) {
+                ret = Node {
+                    kind: NodeKind::Div,
+                    lhs: Some(Box::new(ret)),
+                    rhs: Some(Box::new(self.primary())),
+                    val: None
+                }
+            } else {
+                return ret
+            }
+        }
+    }
+    // primary = "(" expr ")" | num
+    pub fn primary(&mut self) -> Node {
+        if self.consume("(".to_string()) {
+            let ret = self.expr();
+            self.expect(")".to_string());
+            ret
+        } else {
+            Node {
+                kind: NodeKind::Num,
+                lhs: None,
+                rhs: None,
+                val: Some(self.expect_number())
+            }
+        }
+    }
+}
+
+fn gen(node: Node) {
+    if node.kind == NodeKind::Num {
+        println!("  push {}", node.val.unwrap());
+        return;
+    }
+    gen(*node.lhs.unwrap());
+    gen(*node.rhs.unwrap());
+    println!("  pop rdi");
+    println!("  pop rax");
+    match node.kind {
+        NodeKind::Add => println!("  add rax, rdi"),
+        NodeKind::Sub => println!("  sub rax, rdi"),
+        NodeKind::Mul => println!("  imul rax, rdi"),
+        NodeKind::Div => {
+            println!("  cqo");
+            println!("  idiv rdi");
+        }
+        _ => {
+            eprintln!("unexpected token");
+            process::exit(1);
+        }
+    }
+    println!("  push rax");
 }
 
 fn main() {
@@ -105,20 +208,15 @@ fn main() {
         eprintln!("{}: invalid number of arguments", args[0]);
         process::exit(1);
     }
-    let mut chars = args[1].chars().peekable();
-    let tokens = tokenize(&mut chars);
+    let mut user_input = args[1].chars().peekable();
+    let tokens = tokenize(&mut user_input);
     // println!("{:?}", tokens);
     let mut parser = Parser::new(tokens);
+    let node = parser.expr();
     println!(".intel_syntax noprefix");
     println!(".global main");
     println!("main:");
-    println!("  mov rax, {}", parser.expect_number());
-    while !parser.at_eof() {
-        if parser.consume("+".to_string()) {
-            println!("  add rax, {}", parser.expect_number());
-            continue;
-        }
-        parser.expect("-".to_string());
-        println!("  sub rax, {}", parser.expect_number());
-    }
+    gen(node);
+    println!("  pop rax");
+    println!("  ret");
 }
