@@ -14,7 +14,7 @@ enum TokenKind {
 struct Token {
     kind: TokenKind,
     val: Option<i32>,
-    str: String,
+    str: String
 }
 
 fn tokenize(iter: &mut Peekable<Chars>) -> Vec<Token> {
@@ -38,7 +38,44 @@ fn tokenize(iter: &mut Peekable<Chars>) -> Vec<Token> {
                     }
                 }
                 tokens.push(Token { kind: TokenKind::Num, val: Some(ret), str: ret.to_string() });
-                // iter.next();
+            }
+            Some('=') => {
+                iter.next();
+                if let Some('=') = iter.peek() {
+                    tokens.push(Token { kind: TokenKind::Reserved, val: None, str: "==".to_string() });
+                    iter.next();
+                } else {
+                    eprintln!("invalid token");
+                    process::exit(1);
+                }
+            }
+            Some('!') => {
+                iter.next();
+                if let Some('=') = iter.peek() {
+                    tokens.push(Token { kind: TokenKind::Reserved, val: None, str: "!=".to_string() });
+                    iter.next();
+                } else {
+                    eprintln!("invalid token");
+                    process::exit(1);
+                }
+            }
+            Some('<') => {
+                iter.next();
+                if let Some('=') = iter.peek() {
+                    tokens.push(Token { kind: TokenKind::Reserved, val: None, str: "<=".to_string() });
+                    iter.next();
+                } else {
+                    tokens.push(Token { kind: TokenKind::Reserved, val: None, str: "<".to_string() });
+                }
+            }
+            Some('>') => {
+                iter.next();
+                if let Some('=') = iter.peek() {
+                    tokens.push(Token { kind: TokenKind::Reserved, val: None, str: ">=".to_string() });
+                    iter.next();
+                } else {
+                    tokens.push(Token { kind: TokenKind::Reserved, val: None, str: ">".to_string() });
+                }
             }
             Some(c) if vec!['+', '-', '*', '/', '(', ')'].contains(c) => {
                 tokens.push(Token { kind: TokenKind::Reserved, val: None, str: c.to_string() });
@@ -64,6 +101,10 @@ enum NodeKind {
     Mul,
     Div,
     Num,
+    Eq,
+    Ne,
+    Lt,
+    Le
 }
 
 #[derive(Debug)]
@@ -114,8 +155,72 @@ impl Parser {
     // pub fn at_eof(&self) -> bool {
     //     self.current_token().kind == TokenKind::EOF
     // }
-    // expr = mul ("+" mul | "-" mul)*
+    // expr = equality
     pub fn expr(&mut self) -> Node {
+        self.equality()
+    }
+    // equality = relational ("==" relational | "!=" relational)*
+    pub fn equality(&mut self) -> Node {
+        let mut ret = self.relational();
+        loop {
+            if self.consume("==".to_string()) {
+                ret = Node {
+                    kind: NodeKind::Eq,
+                    lhs: Some(Box::new(ret)),
+                    rhs: Some(Box::new(self.relational())),
+                    val: None
+                }
+            } else if self.consume("!=".to_string()) {
+                ret = Node {
+                    kind: NodeKind::Ne,
+                    lhs: Some(Box::new(ret)),
+                    rhs: Some(Box::new(self.relational())),
+                    val: None
+                }
+            } else {
+                return ret
+            }
+        }
+    }
+    // relational = add ("<" add | "<=" add | ">" add | ">=" add)*
+    pub fn relational(&mut self) -> Node {
+        let mut ret = self.add();
+        loop {
+            if self.consume("<".to_string()) {
+                ret = Node {
+                    kind: NodeKind::Lt,
+                    lhs: Some(Box::new(ret)),
+                    rhs: Some(Box::new(self.add())),
+                    val: None
+                }
+            } else if self.consume("<=".to_string()) {
+                ret = Node {
+                    kind: NodeKind::Le,
+                    lhs: Some(Box::new(ret)),
+                    rhs: Some(Box::new(self.add())),
+                    val: None
+                }
+            } else if self.consume(">".to_string()) {
+                ret = Node {
+                    kind: NodeKind::Lt,
+                    lhs: Some(Box::new(self.add())),
+                    rhs: Some(Box::new(ret)),
+                    val: None
+                }
+            } else if self.consume(">=".to_string()) {
+                ret = Node {
+                    kind: NodeKind::Le,
+                    lhs: Some(Box::new(self.add())),
+                    rhs: Some(Box::new(ret)),
+                    val: None
+                }
+            } else {
+                return ret
+            }
+        }
+    }
+    // add = mul ("+" mul | "-" mul)*
+    pub fn add(&mut self) -> Node {
         let mut ret = self.mul();
         loop {
             if self.consume("+".to_string()) {
@@ -212,6 +317,26 @@ fn gen(node: Node) {
         NodeKind::Div => {
             println!("  cqo");
             println!("  idiv rdi");
+        }
+        NodeKind::Eq => {
+            println!("  cmp rax, rdi");
+            println!("  sete al");
+            println!("  movzb rax, al");
+        }
+        NodeKind::Ne => {
+            println!("  cmp rax, rdi");
+            println!("  setne al");
+            println!("  movzb rax, al");
+        }
+        NodeKind::Lt => {
+            println!("  cmp rax, rdi");
+            println!("  setl al");
+            println!("  movzb rax, al");
+        }
+        NodeKind::Le => {
+            println!("  cmp rax, rdi");
+            println!("  setle al");
+            println!("  movzb rax, al");
         }
         _ => {
             eprintln!("unexpected token");
