@@ -137,27 +137,42 @@ impl Parser {
             }
         }
     }
-    // mul = primary ("*" primary | "/" primary)*
+    // mul = unary ("*" unary | "/" unary)*
     pub fn mul(&mut self) -> Node {
-        let mut ret = self.primary();
+        let mut ret = self.unary();
         loop {
             if self.consume("*".to_string()) {
                 ret = Node {
                     kind: NodeKind::Mul,
                     lhs: Some(Box::new(ret)),
-                    rhs: Some(Box::new(self.primary())),
+                    rhs: Some(Box::new(self.unary())),
                     val: None
                 }
             } else if self.consume("/".to_string()) {
                 ret = Node {
                     kind: NodeKind::Div,
                     lhs: Some(Box::new(ret)),
-                    rhs: Some(Box::new(self.primary())),
+                    rhs: Some(Box::new(self.unary())),
                     val: None
                 }
             } else {
                 return ret
             }
+        }
+    }
+    // unary = ("+" | "-")? unary | primary
+    pub fn unary(&mut self) -> Node {
+        if self.consume("+".to_string()) {
+            self.unary()
+        } else if self.consume("-".to_string()) {
+            Node {
+                kind: NodeKind::Sub,
+                lhs: Some(Box::new(self.new_num(0))),
+                rhs: Some(Box::new(self.unary())),
+                val: None
+            }
+        } else {
+            self.primary()
         }
     }
     // primary = "(" expr ")" | num
@@ -167,12 +182,16 @@ impl Parser {
             self.expect(")".to_string());
             ret
         } else {
-            Node {
-                kind: NodeKind::Num,
-                lhs: None,
-                rhs: None,
-                val: Some(self.expect_number())
-            }
+            let val = self.expect_number();
+            self.new_num(val)
+        }
+    }
+    fn new_num(&mut self, num: i32) -> Node {
+        Node {
+            kind: NodeKind::Num,
+            lhs: None,
+            rhs: None,
+            val: Some(num)
         }
     }
 }
