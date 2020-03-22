@@ -21,7 +21,7 @@ fn main() {
         }
     };
     let mut parser = Parser::new(tokens);
-    let node = match parser.parse() {
+    let nodes = match parser.parse() {
         Ok(n) => n,
         Err(e) => {
             eprintln!("failed parse: {}", e);
@@ -31,7 +31,17 @@ fn main() {
     println!(".intel_syntax noprefix");
     println!(".global main");
     println!("main:");
-    generator::generate(node);
-    println!("  pop rax");
+
+    println!("  push rbp");
+    println!("  mov rbp, rsp");
+    println!("  sub rsp, 208");
+
+    for node in nodes {
+        generator::generate(node);
+        println!("  pop rax");
+    }
+
+    println!("  mov rsp, rbp");
+    println!("  pop rbp");
     println!("  ret");
 }

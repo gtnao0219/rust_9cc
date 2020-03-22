@@ -4,6 +4,7 @@ use std::str::Chars;
 #[derive(Debug, PartialEq)]
 pub enum TokenKind {
     Reserved,
+    Ident,
     Num,
     EOF,
 }
@@ -20,6 +21,14 @@ pub fn tokenize(iter: &mut Peekable<Chars>) -> Result<Vec<Token>, &'static str> 
     loop {
         match iter.peek() {
             Some(c) if c.is_whitespace() => {
+                iter.next();
+            }
+            Some(c) if 'a' <= *c && *c <= 'z' => {
+                tokens.push(Token {
+                    kind: TokenKind::Ident,
+                    val: None,
+                    str: c.to_string(),
+                });
                 iter.next();
             }
             Some(c) if c.is_digit(10) => {
@@ -51,7 +60,11 @@ pub fn tokenize(iter: &mut Peekable<Chars>) -> Result<Vec<Token>, &'static str> 
                     });
                     iter.next();
                 } else {
-                    return Err("invalid token");
+                    tokens.push(Token {
+                        kind: TokenKind::Reserved,
+                        val: None,
+                        str: "=".to_string(),
+                    });
                 }
             }
             Some('!') => {
@@ -101,7 +114,7 @@ pub fn tokenize(iter: &mut Peekable<Chars>) -> Result<Vec<Token>, &'static str> 
                     });
                 }
             }
-            Some(c) if vec!['+', '-', '*', '/', '(', ')'].contains(c) => {
+            Some(c) if vec!['+', '-', '*', '/', '(', ')', ';'].contains(c) => {
                 tokens.push(Token {
                     kind: TokenKind::Reserved,
                     val: None,
